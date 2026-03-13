@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HL7 Anomaly Detection Dashboard</title>
+    <meta http-equiv="refresh" content="30">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .navbar-brand {
+            color: white !important;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+            border-left: 4px solid #667eea;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+        }
+        .stat-label {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .anomaly-high {
+            border-left: 4px solid #dc3545;
+            background: #fff5f5;
+        }
+        .anomaly-medium {
+            border-left: 4px solid #ffc107;
+            background: #fff9e6;
+        }
+        .anomaly-low {
+            border-left: 4px solid #28a745;
+            background: #f0fff4;
+        }
+        .severity-high {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .severity-medium {
+            color: #ffc107;
+            font-weight: bold;
+        }
+        .severity-low {
+            color: #28a745;
+        }
+        .card {
+            border-radius: 15px;
+            border: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            font-weight: bold;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        .error {
+            color: #dc3545;
+            background: #ffe6e6;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .badge {
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <span class="navbar-brand">🚨 HL7 Anomaly Detection Dashboard</span>
+            <span class="text-white">
+                <small>Auto-refreshes every 30 seconds</small>
+            </span>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Stats Cards -->
+        <div class="row mb-4" id="statsRow">
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-label">Total Messages</div>
+                    <div class="stat-number" id="totalMessages">-</div>
+                    <small class="text-muted">All time</small>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-label">Unique Patients</div>
+                    <div class="stat-number" id="uniquePatients">-</div>
+                    <small class="text-muted">Distinct patients</small>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card" style="border-left-color: #dc3545;">
+                    <div class="stat-label">Anomalies Detected</div>
+                    <div class="stat-number" id="anomaliesCount">-</div>
+                    <small class="text-muted">Total anomalies</small>
+                </div>
+            </div>
+            <div class="col-md-3 mb-3">
+                <div class="stat-card">
+                    <div class="stat-label">Active in Last Hour</div>
+                    <div class="stat-number" id="activePatients">-</div>
+                    <small class="text-muted">Patients with recent activity</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Recent Anomalies -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📊 Recent Anomalies</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentAnomalies" class="loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Types -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">📈 Message Types</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="messageTypes" class="loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <!-- Anomaly Types -->
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">🔍 Anomaly Types Breakdown</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="anomalyTypes" class="loading">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <small>HL7 Anomaly Detection System | Running on Render.com | Real-time monitoring</small>
+        </div>
+    </div>
+
+    <script>
+        async function loadData() {
+            try {
+                const response = await fetch('/api/stats');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Update stats
+                document.getElementById('totalMessages').textContent = data.total_messages?.toLocaleString() || '0';
+                document.getElementById('uniquePatients').textContent = data.unique_patients?.toLocaleString() || '0';
+                document.getElementById('anomaliesCount').textContent = data.anomalies_count?.toLocaleString() || '0';
+                document.getElementById('activePatients').textContent = data.active_patients?.toLocaleString() || '0';
+                
+                // Recent anomalies
+                if (data.recent_anomalies && data.recent_anomalies.length > 0) {
+                    const anomaliesHtml = data.recent_anomalies.map(a => `
+                        <div class="alert anomaly-${a.severity} mb-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="badge bg-${a.severity === 'high' ? 'danger' : a.severity === 'medium' ? 'warning' : 'success'} me-2">
+                                        ${a.anomaly_type}
+                                    </span>
+                                    <strong>Patient: ${a.patient_id}</strong>
+                                </div>
+                                <small class="text-muted">${new Date(a.detected_at).toLocaleString()}</small>
+                            </div>
+                            <div class="mt-1">${a.description}</div>
+                            ${!a.resolved ? `
+                                <button class="btn btn-sm btn-outline-success mt-2" onclick="resolveAnomaly('${a.id}')">
+                                    ✓ Mark Resolved
+                                </button>
+                            ` : '<span class="badge bg-success mt-2">Resolved</span>'}
+                        </div>
+                    `).join('');
+                    document.getElementById('recentAnomalies').innerHTML = anomaliesHtml;
+                } else {
+                    document.getElementById('recentAnomalies').innerHTML = '<div class="alert alert-success">No anomalies detected in the last hour</div>';
+                }
+                
+                // Message types
+                if (data.message_types && data.message_types.length > 0) {
+                    const typesHtml = data.message_types.map(t => `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>${t.message_type}</span>
+                            <span class="badge bg-primary">${t.count}</span>
+                        </div>
+                    `).join('');
+                    document.getElementById('messageTypes').innerHTML = typesHtml;
+                } else {
+                    document.getElementById('messageTypes').innerHTML = '<p>No messages yet</p>';
+                }
+                
+                // Anomaly types
+                if (data.anomaly_types && data.anomaly_types.length > 0) {
+                    const anomalyTypesHtml = data.anomaly_types.map(a => `
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <span class="badge bg-${a.severity === 'high' ? 'danger' : a.severity === 'medium' ? 'warning' : 'success'} me-2">
+                                    ${a.anomaly_type}
+                                </span>
+                                <span class="text-${a.severity === 'high' ? 'danger' : a.severity === 'medium' ? 'warning' : 'success'}">
+                                    (${a.severity})
+                                </span>
+                            </div>
+                            <span class="badge bg-secondary">${a.count}</span>
+                        </div>
+                    `).join('');
+                    document.getElementById('anomalyTypes').innerHTML = anomalyTypesHtml;
+                } else {
+                    document.getElementById('anomalyTypes').innerHTML = '<div class="alert alert-success">No anomalies detected yet</div>';
+                }
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('recentAnomalies').innerHTML = `<div class="alert alert-danger">Failed to load data: ${error.message}</div>`;
+            }
+        }
+        
+        async function resolveAnomaly(anomalyId) {
+            try {
+                const response = await fetch(`/api/anomalies/${anomalyId}/resolve`, {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    loadData(); // Reload data
+                }
+            } catch (error) {
+                console.error('Error resolving anomaly:', error);
+            }
+        }
+        
+        // Load immediately and every 30 seconds
+        loadData();
+        setInterval(loadData, 30000);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
