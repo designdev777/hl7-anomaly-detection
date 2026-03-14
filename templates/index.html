@@ -169,6 +169,14 @@
             background: white;
             border-radius: 0 0 15px 15px;
         }
+        .nav-tabs .nav-link {
+            color: #495057;
+            font-weight: 500;
+        }
+        .nav-tabs .nav-link.active {
+            color: #667eea;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -185,8 +193,8 @@
                         Simulation Active
                     </span>
                 </div>
-                <button class="btn btn-light me-2" onclick="refreshData()">
-                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                <button class="btn btn-light me-2" onclick="refreshAllData()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh All
                 </button>
             </div>
         </div>
@@ -298,8 +306,11 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="card">
-                                    <div class="card-header">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
                                         <h5 class="mb-0"><i class="bi bi-exclamation-diamond me-2"></i>Recent Anomalies</h5>
+                                        <button class="btn btn-sm btn-outline-light" onclick="refreshDashboard()">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
                                     </div>
                                     <div class="card-body">
                                         <div id="recentAnomalies" class="loading">
@@ -312,8 +323,11 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="card">
-                                    <div class="card-header">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
                                         <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Message Types</h5>
+                                        <button class="btn btn-sm btn-outline-light" onclick="refreshDashboard()">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
                                     </div>
                                     <div class="card-body">
                                         <div id="messageTypes" class="loading">
@@ -328,8 +342,11 @@
                         <div class="row mt-4">
                             <div class="col-md-12">
                                 <div class="card">
-                                    <div class="card-header">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
                                         <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Anomaly Types Breakdown</h5>
+                                        <button class="btn btn-sm btn-outline-light" onclick="refreshDashboard()">
+                                            <i class="bi bi-arrow-clockwise"></i>
+                                        </button>
                                     </div>
                                     <div class="card-body">
                                         <div id="anomalyTypes" class="loading">
@@ -350,15 +367,18 @@
                                 <h5 class="mb-0"><i class="bi bi-envelope me-2"></i>Live HL7 Messages</h5>
                                 <div>
                                     <span class="badge bg-secondary me-2" id="messageCount">0 messages</span>
+                                    <button class="btn btn-sm btn-outline-light" onclick="refreshMessages()">
+                                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                                    </button>
                                     <button class="btn btn-sm btn-outline-light" onclick="clearMessages()">
                                         <i class="bi bi-trash"></i> Clear
                                     </button>
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div class="table-responsive">
+                                <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                                     <table class="table table-hover">
-                                        <thead>
+                                        <thead class="sticky-top bg-white">
                                             <tr>
                                                 <th>Time</th>
                                                 <th>Message ID</th>
@@ -370,7 +390,7 @@
                                         </thead>
                                         <tbody id="messagesTableBody">
                                             <tr>
-                                                <td colspan="6" class="text-center">No messages yet</td>
+                                                <td colspan="6" class="text-center">Loading messages...</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -392,7 +412,7 @@
                                 </div>
                             </div>
                             <div class="card-body">
-                                <div id="anomaliesList">
+                                <div id="anomaliesList" style="max-height: 600px; overflow-y: auto;">
                                     <div class="text-center">Loading...</div>
                                 </div>
                             </div>
@@ -407,7 +427,7 @@
                 <i class="bi bi-database"></i> HL7 Anomaly Detection System | 
                 Running on Render.com | 
                 Continuous Simulation | 
-                Real-time updates via Socket.IO
+                Real-time updates
             </small>
         </div>
     </div>
@@ -434,20 +454,29 @@
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
     <script>
         // Socket.IO connection
-        const socket = io();
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            reconnection: true,
+            reconnectionAttempts: 10,
+            reconnectionDelay: 1000
+        });
         
         socket.on('connect', function() {
             console.log('Connected to server');
             updateSimulationStatus(true);
+            refreshAllData();
         });
         
         socket.on('new_message', function(data) {
-            console.log('New message:', data);
-            updateStats(data.stats);
-            addMessageToTable(data.message);
-            if (data.message.has_anomaly) {
-                updateAnomaliesTab();
+            console.log('New message received:', data);
+            if (data.stats) {
+                updateStats(data.stats);
             }
+            if (data.message) {
+                addMessageToTable(data.message);
+            }
+            // Refresh dashboard data
+            refreshDashboard();
         });
         
         socket.on('disconnect', function() {
@@ -479,6 +508,7 @@
             .then(data => {
                 updateSimulationStatus(data.active);
                 showNotification('Simulation stopped', 'warning');
+                refreshAllData();
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -503,6 +533,7 @@
             .then(response => response.json())
             .then(data => {
                 addMessageToTable(data);
+                refreshDashboard();
                 showNotification('Message generated', 'success');
             })
             .catch(error => {
@@ -540,33 +571,39 @@
         }
         
         function addMessageToTable(message) {
+            if (!message) return;
+            
             const tbody = document.getElementById('messagesTableBody');
             const row = document.createElement('tr');
             row.className = 'message-row';
-            row.onclick = () => showMessageDetail(message);
+            row.setAttribute('data-message-id', message.id);
             
-            const time = new Date(message.timestamp).toLocaleTimeString();
+            const time = message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : 'N/A';
             const anomalyBadge = message.has_anomaly ? 
                 `<span class="badge bg-${message.anomaly_severity === 'high' ? 'danger' : message.anomaly_severity === 'medium' ? 'warning' : 'success'}">
-                    ${message.anomaly_type}
+                    ${message.anomaly_type || 'Anomaly'}
                 </span>` : 
                 '<span class="badge bg-secondary">None</span>';
             
             row.innerHTML = `
                 <td>${time}</td>
-                <td><code>${message.id}</code></td>
-                <td>${message.message_type}</td>
-                <td>${message.patient_name || message.patient_id}</td>
+                <td><code>${message.id || 'N/A'}</code></td>
+                <td>${message.message_type || 'N/A'}</td>
+                <td>${message.patient_name || message.patient_id || 'N/A'}</td>
                 <td>${anomalyBadge}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showMessageDetail(${JSON.stringify(message).replace(/"/g, '&quot;')})">
-                        <i class="bi bi-eye"></i> View
+                        <i class="bi bi-eye"></i>
                     </button>
                 </td>
             `;
             
+            row.onclick = () => showMessageDetail(message);
+            
             tbody.prepend(row);
-            if (tbody.children.length > 100) {
+            
+            // Keep only last 100 messages
+            while (tbody.children.length > 100) {
                 tbody.removeChild(tbody.lastChild);
             }
             
@@ -581,11 +618,10 @@
             if (message.full_message) {
                 const segments = message.full_message.split('\r');
                 formattedMessage = segments.map(segment => {
-                    const fields = segment.split('|');
-                    if (fields[0] === 'MSH') {
-                        return `<span class="segment">${fields[0]}</span>|${fields.slice(1).join('|')}`;
+                    if (segment.startsWith('MSH')) {
+                        return `<span class="segment">${segment.split('|')[0]}</span>|${segment.split('|').slice(1).join('|')}`;
                     }
-                    return `<span class="segment">${fields[0]}</span>|${fields.slice(1).join('|')}`;
+                    return segment;
                 }).join('<br>');
             }
             
@@ -595,37 +631,33 @@
                     <table class="table table-sm">
                         <tr>
                             <th>ID:</th>
-                            <td><code>${message.id}</code></td>
+                            <td><code>${message.id || 'N/A'}</code></td>
                         </tr>
                         <tr>
                             <th>Time:</th>
-                            <td>${new Date(message.timestamp).toLocaleString()}</td>
+                            <td>${message.timestamp ? new Date(message.timestamp).toLocaleString() : 'N/A'}</td>
                         </tr>
                         <tr>
                             <th>Type:</th>
-                            <td>${message.message_type} - ${message.message_type_desc || ''}</td>
+                            <td>${message.message_type || 'N/A'} ${message.message_type_desc ? `- ${message.message_type_desc}` : ''}</td>
                         </tr>
                         <tr>
                             <th>Patient:</th>
-                            <td>${message.patient_name || message.patient_id}</td>
+                            <td>${message.patient_name || message.patient_id || 'N/A'}</td>
                         </tr>
                         <tr>
                             <th>Patient ID:</th>
-                            <td>${message.patient_id}</td>
-                        </tr>
-                        <tr>
-                            <th>Segments:</th>
-                            <td>${message.segments || 'N/A'}</td>
+                            <td>${message.patient_id || 'N/A'}</td>
                         </tr>
                         ${message.has_anomaly ? `
                         <tr class="table-danger">
                             <th>Anomaly:</th>
                             <td>
                                 <span class="badge bg-${message.anomaly_severity === 'high' ? 'danger' : message.anomaly_severity === 'medium' ? 'warning' : 'success'}">
-                                    ${message.anomaly_type}
+                                    ${message.anomaly_type || 'Unknown'}
                                 </span>
                                 <br>
-                                <small>${message.anomaly_description}</small>
+                                <small>${message.anomaly_description || ''}</small>
                             </td>
                         </tr>
                         ` : ''}
@@ -651,6 +683,7 @@
                 if (data.success) {
                     showNotification('Anomaly resolved', 'success');
                     refreshAnomalies();
+                    refreshDashboard();
                 }
             })
             .catch(error => {
@@ -659,84 +692,242 @@
             });
         }
         
-        function refreshData() {
+        function refreshDashboard() {
             fetch('/api/stats')
                 .then(response => response.json())
-                .then(data => updateStats(data))
-                .catch(error => console.error('Error:', error));
-            
-            refreshAnomalies();
-        }
-        
-        function refreshAnomalies() {
-            fetch('/api/anomalies?limit=50')
-                .then(response => response.json())
                 .then(data => {
-                    updateAnomaliesTab(data);
-                    document.getElementById('anomalyCount').textContent = `${data.length} anomalies`;
+                    updateStats(data);
+                    
+                    // Fetch additional dashboard data
+                    return fetch('/api/anomalies?limit=10');
                 })
-                .catch(error => console.error('Error:', error));
+                .then(response => response.json())
+                .then(anomalies => {
+                    updateRecentAnomalies(anomalies);
+                    
+                    // Fetch message types data
+                    return fetch('/api/messages?limit=100');
+                })
+                .then(response => response.json())
+                .then(messages => {
+                    updateMessageTypes(messages);
+                    updateAnomalyTypes(messages);
+                })
+                .catch(error => console.error('Error refreshing dashboard:', error));
         }
         
-        function updateAnomaliesTab(anomalies) {
-            const container = document.getElementById('anomaliesList');
+        function updateRecentAnomalies(anomalies) {
+            const container = document.getElementById('recentAnomalies');
             
             if (!anomalies || anomalies.length === 0) {
                 container.innerHTML = '<div class="alert alert-success">No anomalies detected</div>';
                 return;
             }
             
-            const html = anomalies.map(a => `
-                <div class="alert anomaly-${a.severity} mb-3">
+            const html = anomalies.slice(0, 5).map(a => `
+                <div class="alert anomaly-${a.severity || 'medium'} mb-2">
                     <div class="d-flex justify-content-between align-items-start">
                         <div>
                             <span class="badge bg-${a.severity === 'critical' ? 'secondary' : a.severity === 'high' ? 'danger' : a.severity === 'medium' ? 'warning' : 'success'} me-2">
-                                ${a.anomaly_type}
+                                ${a.anomaly_type || 'Unknown'}
                             </span>
-                            <strong>${a.patient_name || a.patient_id}</strong>
-                            <span class="badge bg-info ms-2">${a.message_type || 'Unknown'}</span>
+                            <strong>${a.patient_name || a.patient_id || 'Unknown'}</strong>
                         </div>
-                        <small class="text-muted">${new Date(a.detected_at).toLocaleString()}</small>
+                        <small class="text-muted">${a.detected_at ? new Date(a.detected_at).toLocaleString() : ''}</small>
                     </div>
-                    <div class="mt-2">
-                        <p><strong>Description:</strong> ${a.description}</p>
-                        <div class="hl7-message mt-2">
-                            <small>${(a.full_message || '').substring(0, 200)}${(a.full_message || '').length > 200 ? '...' : ''}</small>
-                        </div>
+                    <div class="mt-1">
+                        <small>${a.description || ''}</small>
                     </div>
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-success" onclick="resolveAnomaly('${a.id}')">
-                            <i class="bi bi-check-circle"></i> Mark Resolved
+                    ${!a.resolved ? `
+                        <button class="btn btn-sm btn-outline-success mt-2" onclick="resolveAnomaly('${a.id}')">
+                            <i class="bi bi-check-circle"></i> Resolve
                         </button>
-                        <button class="btn btn-sm btn-outline-primary" onclick="showMessageDetail(${JSON.stringify(a).replace(/"/g, '&quot;')})">
-                            <i class="bi bi-eye"></i> View Full Message
-                        </button>
+                    ` : '<span class="badge bg-success mt-2">Resolved</span>'}
+                </div>
+            `).join('');
+            
+            container.innerHTML = html || '<div class="alert alert-info">No recent anomalies</div>';
+        }
+        
+        function updateMessageTypes(messages) {
+            const container = document.getElementById('messageTypes');
+            
+            if (!messages || messages.length === 0) {
+                container.innerHTML = '<div class="alert alert-info">No messages yet</div>';
+                return;
+            }
+            
+            // Count message types
+            const typeCount = {};
+            messages.forEach(m => {
+                const type = m.message_type || 'Unknown';
+                typeCount[type] = (typeCount[type] || 0) + 1;
+            });
+            
+            // Sort by count
+            const sorted = Object.entries(typeCount)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            const html = sorted.map(([type, count]) => `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span>${type}</span>
+                    <span class="badge bg-primary">${count}</span>
+                </div>
+            `).join('');
+            
+            container.innerHTML = html || '<div class="alert alert-info">No message types</div>';
+        }
+        
+        function updateAnomalyTypes(messages) {
+            const container = document.getElementById('anomalyTypes');
+            
+            if (!messages || messages.length === 0) {
+                container.innerHTML = '<div class="alert alert-info">No data yet</div>';
+                return;
+            }
+            
+            // Count anomaly types from messages with anomalies
+            const anomalyCount = {};
+            messages.forEach(m => {
+                if (m.has_anomaly && m.anomaly_type) {
+                    anomalyCount[m.anomaly_type] = (anomalyCount[m.anomaly_type] || 0) + 1;
+                }
+            });
+            
+            if (Object.keys(anomalyCount).length === 0) {
+                container.innerHTML = '<div class="alert alert-success">No anomalies detected</div>';
+                return;
+            }
+            
+            // Sort by count
+            const sorted = Object.entries(anomalyCount)
+                .sort((a, b) => b[1] - a[1]);
+            
+            const html = sorted.map(([type, count]) => `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <span class="badge bg-warning me-2">⚠️</span>
+                        ${type}
                     </div>
+                    <span class="badge bg-secondary">${count}</span>
                 </div>
             `).join('');
             
             container.innerHTML = html;
         }
         
+        function refreshMessages() {
+            fetch('/api/messages?limit=100')
+                .then(response => response.json())
+                .then(messages => {
+                    const tbody = document.getElementById('messagesTableBody');
+                    tbody.innerHTML = '';
+                    
+                    if (messages.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No messages</td></tr>';
+                        document.getElementById('messageCount').textContent = '0 messages';
+                        return;
+                    }
+                    
+                    messages.reverse().forEach(message => addMessageToTable(message));
+                })
+                .catch(error => console.error('Error refreshing messages:', error));
+        }
+        
+        function refreshAnomalies() {
+            fetch('/api/anomalies?limit=50')
+                .then(response => response.json())
+                .then(anomalies => {
+                    const container = document.getElementById('anomaliesList');
+                    document.getElementById('anomalyCount').textContent = `${anomalies.length} anomalies`;
+                    
+                    if (anomalies.length === 0) {
+                        container.innerHTML = '<div class="alert alert-success">No anomalies detected</div>';
+                        return;
+                    }
+                    
+                    const html = anomalies.map(a => `
+                        <div class="alert anomaly-${a.severity || 'medium'} mb-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge bg-${a.severity === 'critical' ? 'secondary' : a.severity === 'high' ? 'danger' : a.severity === 'medium' ? 'warning' : 'success'} me-2">
+                                        ${a.anomaly_type || 'Unknown'}
+                                    </span>
+                                    <strong>${a.patient_name || a.patient_id || 'Unknown'}</strong>
+                                    <span class="badge bg-info ms-2">${a.message_type || 'Unknown'}</span>
+                                </div>
+                                <small class="text-muted">${a.detected_at ? new Date(a.detected_at).toLocaleString() : ''}</small>
+                            </div>
+                            <div class="mt-2">
+                                <p><strong>Description:</strong> ${a.description || 'No description'}</p>
+                                ${a.full_message ? `
+                                <div class="hl7-message mt-2">
+                                    <small>${a.full_message.substring(0, 200)}${a.full_message.length > 200 ? '...' : ''}</small>
+                                </div>
+                                ` : ''}
+                            </div>
+                            <div class="mt-2">
+                                ${!a.resolved ? `
+                                    <button class="btn btn-sm btn-outline-success" onclick="resolveAnomaly('${a.id}')">
+                                        <i class="bi bi-check-circle"></i> Mark Resolved
+                                    </button>
+                                ` : '<span class="badge bg-success">Resolved</span>'}
+                                <button class="btn btn-sm btn-outline-primary" onclick="showMessageDetail(${JSON.stringify(a).replace(/"/g, '&quot;')})">
+                                    <i class="bi bi-eye"></i> View Full Message
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    container.innerHTML = html;
+                })
+                .catch(error => console.error('Error refreshing anomalies:', error));
+        }
+        
+        function refreshAllData() {
+            refreshDashboard();
+            refreshMessages();
+            refreshAnomalies();
+        }
+        
         function showNotification(message, type) {
-            // Simple alert for now - could be enhanced with toast notifications
-            console.log(`Notification (${type}): ${message}`);
+            // Create toast notification
+            const toast = document.createElement('div');
+            toast.className = `position-fixed bottom-0 end-0 p-3`;
+            toast.style.zIndex = '9999';
+            toast.innerHTML = `
+                <div class="toast show align-items-center text-white bg-${type} border-0" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
         }
         
         function clearMessages() {
-            document.getElementById('messagesTableBody').innerHTML = `
-                <tr>
-                    <td colspan="6" class="text-center">No messages yet</td>
-                </tr>
-            `;
-            document.getElementById('messageCount').textContent = '0 messages';
+            if (confirm('Clear all messages from display?')) {
+                document.getElementById('messagesTableBody').innerHTML = '<tr><td colspan="6" class="text-center">No messages</td></tr>';
+                document.getElementById('messageCount').textContent = '0 messages';
+            }
         }
         
         // Initial load
-        refreshData();
-        
-        // Auto-refresh dashboard every 10 seconds
-        setInterval(refreshData, 10000);
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshAllData();
+            
+            // Set up auto-refresh for dashboard every 10 seconds
+            setInterval(refreshDashboard, 10000);
+        });
     </script>
 </body>
 </html>
